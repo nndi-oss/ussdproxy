@@ -1,0 +1,60 @@
+url: http://localhost:7654
+dial: "*1234*1234#"
+# 'global' phone number, overriden per session
+phoneNumber: 265888123456
+sessions:
+  - id: 12345678910
+    phoneNumber: 265888123456
+    description: "Basic UDCP Echo application interaction"
+    steps:
+      # The first step is the response after dialing the ussd code
+      - expect: "R;__NODATA___"
+      - userInput: "A;application=echo"
+        expect: "R;__NODATA__"
+      - userInput: "D;Hello World"
+        expect: "D;Hello World"
+      - userInput: "X;" 
+        expect: "X;"
+  - id: 12345678911
+    phoneNumber: 265888123456
+    description: "Basic UDCP Data submission"
+    steps:
+      # The first step is the response after dialing the ussd code
+      - expect: "R;__NODATA___"
+      - userInput: "A;application=influx"
+        expect: "R;__NODATA__"
+      - userInput: "d;volume=0.9282|tags=meter10,site.bt.mw,water-level"
+        expect: "R;__NODATA__"
+      - userInput: "d;volume=0.9282|tags=meter10,site.bt.mw,water-level" 
+        expect: "R;__NODATA__"
+      - userInput: "D;volume=0.9282|tags=meter10,site.bt.mw,water-level" 
+        expect: "X;"
+ 
+  - id: 12345678911
+    phoneNumber: 265888123456
+    description: "Android User Event Capturing Applicaiton"
+    steps:
+      - expect: "R;__NODATA___"
+      - userInput: "A;application=android-ussd-data-capture"
+        expect: "R;__NODATA__"
+      - userInput: "d;app:GooglePhotos|e:open|t:169......|v:9.0|data:off|cpu:80%|mem:1.2G"
+        expect: "R;__NODATA__"
+      - userInput: "d;app:GooglePhotos|e:open|t:169......|v:9.0|data:off|cpu:80%|mem:1.2G"
+        expect: "R;__NODATA__"
+      - userInput: "d;app:GooglePhotos|e:open|t:169......|v:9.0|data:on|cpu:80%|mem:1.2G"
+        expect: "R;__NODATA__"
+      - userInput: "d;app:GooglePhotos|e:open|t:169......|v:9.0|data:on|cpu:80%|mem:1.2G"
+        expect: "R;__NODATA__"
+      - userInput: "d;app:GooglePhotos|e:open|t:169......|v:9.0|data:off|cpu:80%|mem:1.2G"
+        expect: "R;__NODATA__"
+      - userInput: "d;app:GooglePhotos|e:open|t:169......|v:9.0|data:off|cpu:80%|mem:1.2G"
+        expect: "R;__NODATA__"
+      - userInput: "d;app:GooglePhotos|e:open|t:169......|v:9.0|data:off|cpu:80%|mem:1.2G"
+        expect: "R;__NODATA__"
+      - userInput: "d;app:GooglePhotos|e:open|t:169......|v:9.0|data:on|cpu:80%|mem:1.2G"
+        expect: "R;__NODATA__"
+      - userInput: "d;app:GooglePhotos|e:open|t:169......|v:9.0|data:off|cpu:80%|mem:1.2G"
+        expect: "X;sessionID=UNIQUE_SESSION_ID_FOR_NEXT_USSD_CALL"
+      - userInput: "X;" 
+        expect: "X;"
+ 
