@@ -1,2 +1,1 @@
-package ussd
-
+package africastalking_test

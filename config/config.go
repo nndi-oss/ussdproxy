@@ -1,4 +1,4 @@
-package server
+package config
 
 // DatabaseConfig database configuration
 type DatabaseConfig struct {

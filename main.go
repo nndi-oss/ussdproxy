@@ -1,9 +1,9 @@
 package main
 
 import (
-	server "github.com/nndi-oss/ussdproxy/server"
+	cmd "github.com/nndi-oss/ussdproxy/cmd"
 )
 
 func main() {
-	err := server.ListenAndServe()
+	cmd.Execute()
 }

@@ -1,4 +1,4 @@
-package mudcp
+package boltdb
 
 /// Buffer implementation for the protocol-level buffering on the
 /// server side for UDCP sessions
@@ -8,22 +8,21 @@ import (
 	"log"
 
 	"github.com/boltdb/bolt"
+	ussdproxy "github.com/nndi-oss/ussdproxy/lib"
 	"github.com/valyala/bytebufferpool"
 )
 
-// SessionBuffer is a read/write buffer
-type SessionBuffer interface {
-	Read() ([]byte, error)
-	ReadAt(p []byte, offset int64) (int, error)
-	Write(data []byte) error
-	Set([]byte) error
-	FillWith(SessionBuffer) error
-	Purge()
-	IsEmpty() bool
-	Length() int
+type session struct {
+	ussdproxy.Session
+	sessionID   string
+	isCommitted bool
+	recvBuffer  *sessionBuffer
+	sendBuffer  *sessionBuffer
 }
 
 type sessionBuffer struct {
+	ussdproxy.Session
+
 	bucketKeyName []byte
 	dbPath        string
 	id            *string
@@ -42,7 +41,7 @@ func getSessionStore(dbPath string) *bolt.DB {
 }
 
 // GetOrCreateSession obtains or creates the session from the sessionStore (bolt or redis)
-func GetOrCreateSession(sessionID string) Session {
+func GetOrCreateSession(sessionID string) ussdproxy.Session {
 	bucketKeyName := []byte(sessionID)
 	var existingData []byte
 	db := getSessionStore(sessionID)
@@ -79,18 +78,18 @@ func GetOrCreateSession(sessionID string) Session {
 	}
 	return &session{
 		sessionID:  sessionID,
-		recvBuffer: NewSessionBuffer(&sessionID, existingData),
-		sendBuffer: NewSessionBuffer(&sessionID, existingData),
+		recvBuffer: NewSessionBuffer(&sessionID, existingData, db),
+		sendBuffer: NewSessionBuffer(&sessionID, existingData, db),
 	}
 }
 
 func (s *session) SessionID() string {
 	return s.sessionID
 }
-func (s *session) RecvBuffer() SessionBuffer {
+func (s *session) RecvBuffer() ussdproxy.SessionBuffer {
 	return s.recvBuffer
 }
-func (s *session) SendBuffer() SessionBuffer {
+func (s *session) SendBuffer() ussdproxy.SessionBuffer {
 	return s.sendBuffer
 }
 
@@ -120,13 +119,14 @@ func NewEmptySessionBuffer(sessionID *string) *sessionBuffer {
 	}
 }
 
-func NewSessionBuffer(sessionID *string, data []byte) *sessionBuffer {
+func NewSessionBuffer(sessionID *string, data []byte, db *bolt.DB) *sessionBuffer {
 	s := &sessionBuffer{
 		bucketKeyName: []byte("udcpSessions"),
 		dbPath:        "udcp.sessions",
 		id:            sessionID,
 		offset:        0,
 		data:          bytebufferpool.Get(),
+		db:            db,
 	}
 	s.data.Write(data)
 	return s
@@ -137,21 +137,20 @@ func (sb *sessionBuffer) Read() ([]byte, error) {
 }
 
 func (sb *sessionBuffer) Write(data []byte) error {
-	db = getSessionStore()
-	defer db.Close()
+	defer sb.db.Close()
 	_, err := sb.data.Write(data)
 	if err != nil {
 		return err
 	}
-	err = db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket(bucketKeyName)
+	err = sb.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket(sb.bucketKeyName)
 		b.Put([]byte(*sb.id), sb.data.Bytes())
 		return nil
 	})
 	return err
 }
 
-func (sb *sessionBuffer) FillWith(buf SessionBuffer) error {
+func (sb *sessionBuffer) FillWith(buf ussdproxy.SessionBuffer) error {
 	data, err := buf.Read()
 	if err != nil {
 		return err
@@ -166,13 +165,12 @@ func (sb *sessionBuffer) ReadAt(p []byte, offset int64) (int, error) {
 }
 
 func (sb *sessionBuffer) Set(data []byte) error {
-	db = getSessionStore()
-	defer db.Close()
+	defer sb.db.Close()
 	bytebufferpool.Put(sb.data)
 	sb.data = bytebufferpool.Get()
 	sb.data.Write(data)
-	err := db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket(bucketKeyName)
+	err := sb.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket(sb.bucketKeyName)
 		b.Put([]byte(*sb.id), sb.data.Bytes())
 		return nil
 	})
@@ -180,10 +178,10 @@ func (sb *sessionBuffer) Set(data []byte) error {
 }
 
 func (sb *sessionBuffer) Purge() {
-	db = getSessionStore()
+	db := sb.db
 	defer db.Close()
 	db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket(bucketKeyName)
+		b := tx.Bucket(sb.bucketKeyName)
 		b.Put([]byte(fmt.Sprintf("prev_%s", *sb.id)),
 			sb.data.Bytes())
 		b.Put([]byte(*sb.id), nil) // empty the session data

@@ -1,4 +1,4 @@
-url: http://localhost:7654
+url: http://localhost:3000
 dial: "*1234*1234#"
 # 'global' phone number, overriden per session
 phoneNumber: 265888123456

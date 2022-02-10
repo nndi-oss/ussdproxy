@@ -1,9 +1,49 @@
-package ussd
+package africastalking
 
 import (
 	"bytes"
+	"fmt"
 	"io"
+
+	ussdproxy "github.com/nndi-oss/ussdproxy/lib"
+	"github.com/valyala/fasthttp"
 )
+
+type AfricasTalkingUssdHandler struct{}
+
+func (u *AfricasTalkingUssdHandler) Read(ctx *fasthttp.RequestCtx) (ussdproxy.UdcpRequest, error) {
+
+	requestData := ctx.FormValue("text")
+	if requestData == nil {
+		requestData = []byte("R;__NODATA__") // if the request is empty, we default to a receive-ready
+	}
+
+	if ctx.FormValue("phoneNumber") == nil || ctx.FormValue("sessionId") == nil {
+		ctx.SetStatusCode(400)
+		return nil, fmt.Errorf("invalid request, got body: %s", string(ctx.Request.Body()))
+	}
+
+	return parseUssdRequest(&UssdRequest{
+		SessionID:   string(ctx.FormValue("sessionId")),
+		PhoneNumber: string(ctx.FormValue("phoneNumber")),
+		Data:        []byte(requestData),
+		Channel:     string(ctx.FormValue("channel")),
+	})
+}
+
+func (u *AfricasTalkingUssdHandler) GetContentType() string {
+	return "text/plain; charset=ascii"
+}
+
+func (u *AfricasTalkingUssdHandler) Write(response ussdproxy.UdcpResponse, writer io.Writer) (int, error) {
+	writer.Write([]byte("CON\n"))
+	return writer.Write(response.Data())
+}
+
+func (u *AfricasTalkingUssdHandler) WriteEnd(response ussdproxy.UdcpResponse, writer io.Writer) (int, error) {
+	writer.Write([]byte("END\n"))
+	return writer.Write(response.Data())
+}
 
 // UssdRequest struct represents a request coming in from the Network
 // routed through AfricasTalking's USSD API
@@ -29,39 +69,14 @@ func (u *UssdRequest) Bytes() []byte {
 	return buf.Bytes()
 }
 
-func dummyUdcpRequest(req *UssdRequest) (UdcpRequest, error) {
-	return &udcpRequest{
-		header: &UdcpHeader{
-			Type:       DataLongPduType,
-			Version:    UdcpVersion,
-			MoreToSend: false,
-		},
-		data: []byte("dummy"),
-		len:  5,
-	}, nil
-}
-
-func ParseUssdRequest(ussdRequest *UssdRequest) (UdcpRequest, error) {
-	// fmt.Printf("Parsing ussdRequest: %s\n", ussdRequest)
+func parseUssdRequest(ussdRequest *UssdRequest) (ussdproxy.UdcpRequest, error) {
 	ussdData := ussdRequest.Data
-	typ := pduType(ussdData[0])
-	len := int(ussdData[1])
-	moreToSend := typ.HasMoreToSend()
-	// skip the third byte since it's a separator
-	data := make([]byte, len)
-	r := bytes.NewReader(ussdData)
-	r.Seek(3, 0)
-	// Parse the header and data here
-	if _, err := io.ReadAtLeast(r, data, len); err != nil {
-		return nil, InvalidHeaderError
+	typ := ussdproxy.RequestPduType(string(ussdData[0:2]))
+	if typ == ussdproxy.InvalidPduType {
+		return nil, fmt.Errorf("%v got '%v'", ussdproxy.InvalidHeaderError, typ)
 	}
-	return &udcpRequest{
-		header: &UdcpHeader{
-			Type:       typ,
-			Version:    UdcpVersion,
-			MoreToSend: moreToSend,
-		},
-		data: data,
-		len:  len,
-	}, nil
+	//len := len(ussdData)
+	moreToSend := typ.HasMoreToSend()
+	// TODO: add a generic NewRequest func to account for the type
+	return ussdproxy.NewDataRequest(ussdData[2:], moreToSend), nil
 }

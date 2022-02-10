@@ -1,54 +1,13 @@
-package core
+package ussdproxy
 
 import (
 	"fmt"
 	"io"
 )
 
-// UdcpRequestHandler handler for a completed UdcpRequest
-type UdcpRequestHandler func(UdcpRequest, Session) (UdcpResponse, error)
-
-type UdcpData interface {
-	Header() *UdcpHeader
-	Data() []byte
-	Len() int
-	HasMoreToSend() bool
-	IsDataPdu() bool
-	IsReceiveReadyPdu() bool
-	IsReleaseDialoguePdu() bool
-	IsErrorPdu() bool
-	Version() uint8
-	ToString() string
-}
-
-// UdcpRequest represents a request from a USSD interaction (from the client)
-type UdcpRequest interface {
-	UdcpData
-	//UssdRequest() UssdRequestInterface
-}
-
-// UdcpResponse is the server's response for a particular UdcpRequest
-type UdcpResponse interface {
-	UdcpData
-	Request() UdcpRequest
-	SetHeader(header *UdcpHeader) error
-	SetData(data []byte) error
-	Write(w io.Writer) error
-}
-
-// UssdRequestInterface struct represents a request coming in from the Network
-type UssdRequestInterface interface {
-	PhoneNumber() string
-	Data() []byte
-	RawText() string
-	SessionID() string
-	Channel() string
-	Provider() string
-}
-
 // UdcpHeader is the header information in the UdcpRequest
 type UdcpHeader struct {
-	Type       pduType
+	Type       PduType
 	Version    uint8
 	MoreToSend bool
 }
@@ -67,16 +26,6 @@ type udcpResponse struct {
 	data    []byte
 }
 
-// ProcessUssdRequest is the main procedure to process ussd request into UdcpResponse
-func ProcessUssdRequest(ussdRequest *UssdRequest, application UdcpApplication) (UdcpResponse, error) {
-	udcpReq, err := ParseUssdRequest(ussdRequest)
-	if err != nil {
-		return nil, err
-	}
-	return ProcessUdcpRequest(udcpReq, application)
-	// fmt.Printf("Finished parsing UdcpRequest: %s\n", udcpReq)
-}
-
 func ProcessUdcpRequest(udcpReq UdcpRequest, application UdcpApplication) (UdcpResponse, error) {
 	/// Inorder to process a UssdRequest we must do the following things
 	/// 0. Parse the UssdRequest to a UdcpRequest
@@ -91,7 +40,10 @@ func ProcessUdcpRequest(udcpReq UdcpRequest, application UdcpApplication) (UdcpR
 	if udcpReq == nil {
 		return NewErrorResponse(ErrorCodeProtoErrorMask), UnknownParseError
 	}
-	session := GetOrCreateSession(udcpReq.SessionID)
+	session := application.GetOrCreateSession()
+	if session == nil {
+		return NewErrorResponse(ErrorCodeProtoErrorMask), fmt.Errorf("session is nil or not configured")
+	}
 	// The UDCP provider has sent an error frame
 	if udcpReq.IsErrorPdu() {
 		fmt.Println("Received ErrorPdu. Initiating ReleaseDialogue")
@@ -176,7 +128,7 @@ func (req *udcpRequest) IsErrorPdu() bool {
 }
 
 func (req *udcpRequest) Version() uint8 {
-	return UdcpVersion
+	return ProtocolVersion
 }
 
 func (req *udcpRequest) String() string {
@@ -205,8 +157,8 @@ func (res *udcpResponse) ToString() string {
 func NewUdcpResponse(request UdcpRequest, responseType uint8, moreToSend bool, data []byte) UdcpResponse {
 	return &udcpResponse{
 		header: &UdcpHeader{
-			Type:       pduType(responseType),
-			Version:    UdcpVersion,
+			Type:       PduType(responseType),
+			Version:    ProtocolVersion,
 			MoreToSend: moreToSend,
 		},
 		request: request,
@@ -224,7 +176,7 @@ func NewDataResponse(request UdcpRequest, data []byte, moreToSend bool) UdcpResp
 	return &udcpResponse{
 		header: &UdcpHeader{
 			Type:       typ,
-			Version:    UdcpVersion,
+			Version:    ProtocolVersion,
 			MoreToSend: moreToSend,
 		},
 		request: request,
@@ -239,7 +191,7 @@ func NewReceiveReadyRequest() UdcpRequest {
 		header: &UdcpHeader{
 			MoreToSend: false,
 			Type:       ReceiveReadyPduType,
-			Version:    UdcpVersion,
+			Version:    ProtocolVersion,
 		},
 		data: []byte(NoDataResponse),
 		len:  len(NoDataResponse),
@@ -255,7 +207,7 @@ func NewDataRequest(data []byte, moreToSend bool) UdcpRequest {
 	return &udcpRequest{
 		header: &UdcpHeader{
 			Type:       typ,
-			Version:    UdcpVersion,
+			Version:    ProtocolVersion,
 			MoreToSend: moreToSend,
 		},
 		data: data,
@@ -268,7 +220,7 @@ func NewReceiveReadyResponse() UdcpResponse {
 	return &udcpResponse{
 		header: &UdcpHeader{
 			Type:       ReceiveReadyPduType,
-			Version:    UdcpVersion,
+			Version:    ProtocolVersion,
 			MoreToSend: true,
 		},
 		request: nil,
@@ -282,11 +234,11 @@ func NewUserAbortReleaseDialogueResponse() UdcpResponse {
 }
 
 // NewReleaseDialogueResponse returns a UdcpResponse with a ReceiveReady type
-func NewReleaseDialogueResponse(reason pduType) UdcpResponse {
+func NewReleaseDialogueResponse(reason PduType) UdcpResponse {
 	return &udcpResponse{
 		header: &UdcpHeader{
 			Type:       reason,
-			Version:    UdcpVersion,
+			Version:    ProtocolVersion,
 			MoreToSend: false,
 		},
 		request: nil,
@@ -300,12 +252,12 @@ func NewProtocolErrorResponse() UdcpResponse {
 }
 
 // NewErrorResponse returns an error response
-func NewErrorResponse(errorCode pduType) UdcpResponse {
+func NewErrorResponse(errorCode PduType) UdcpResponse {
 	// TODO: Where to put error code?
 	return &udcpResponse{
 		header: &UdcpHeader{
 			Type:       errorCode,
-			Version:    UdcpVersion,
+			Version:    ProtocolVersion,
 			MoreToSend: false,
 		},
 		request: nil,
@@ -368,13 +320,5 @@ func (res *udcpResponse) IsErrorPdu() bool {
 }
 
 func (res *udcpResponse) Version() uint8 {
-	return UdcpVersion
-}
-
-func parsePduType() int {
-	return -1
-}
-
-func parseAsciiHeaderToType(header string) int {
-	return -1
+	return ProtocolVersion
 }
