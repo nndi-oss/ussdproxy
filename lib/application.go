@@ -37,6 +37,10 @@ type MultiplexingApplication struct {
 }
 
 func NewMultiplexingApplication(apps ...UdcpApplication) *MultiplexingApplication {
+	if len(apps) < 1 {
+		panic("NewMultiplexingApplication: invalid argument provided for 'apps'")
+	}
+
 	return &MultiplexingApplication{
 		availableApplications: apps,
 		currentApp:            apps[0],
@@ -134,6 +138,9 @@ func ProcessUdcpRequest(udcpReq UdcpRequest, application UdcpApplication) (UdcpR
 	if udcpReq.IsReceiveReadyPdu() {
 		fmt.Printf("Server: Received ReceiveReadyPdu session=%s\n", session.SessionID())
 		response, err := application.OnReceiveReady(udcpReq, session)
+		if err != nil {
+			return nil, err
+		}
 		fmt.Printf("Server: Done executing application.OnReceiveReady session=%s\n", session.SessionID())
 		if !response.HasMoreToSend() {
 			session.Reset()
