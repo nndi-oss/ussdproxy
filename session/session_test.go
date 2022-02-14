@@ -1,4 +1,4 @@
-package core_test
+package session_test
 
 import "testing"
 
