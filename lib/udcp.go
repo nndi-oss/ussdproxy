@@ -3,6 +3,8 @@ package ussdproxy
 import (
 	"fmt"
 	"io"
+	"unicode"
+	"unicode/utf8"
 )
 
 // UdcpHeader is the header information in the UdcpRequest
@@ -24,6 +26,21 @@ type udcpResponse struct {
 	request UdcpRequest
 	len     int
 	data    []byte
+}
+
+func isASCII(s []byte) bool {
+	if len(s) == 1 {
+		_, size := utf8.DecodeRune(s)
+		return size < 2
+	}
+
+	for _, r := range s {
+		if r > unicode.MaxASCII {
+			return false
+		}
+	}
+
+	return true
 }
 
 func ProcessUdcpRequest(udcpReq UdcpRequest, application UdcpApplication) (UdcpResponse, error) {
@@ -200,6 +217,10 @@ func NewReceiveReadyRequest() UdcpRequest {
 
 // NewDataRequest returns a UdcpRequest
 func NewDataRequest(data []byte, moreToSend bool) UdcpRequest {
+	if !isASCII(data) {
+		return NewErrorResponse(ErrorNotAsciiPduType)
+	}
+
 	typ := DataLongPduType
 	if moreToSend {
 		typ = DataPduWithMtsType

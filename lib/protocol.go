@@ -31,6 +31,7 @@ const (
 	DataPduWithMtsType    PduType = 0x64
 	ReceiveReadyPduType   PduType = 0x52
 	ErrorPduType          PduType = 0x45
+	ErrorNotAsciiPduType  PduType = 0x46
 	ReleaseDialogPduType  PduType = 0x58
 	QueryPduType          PduType = 0x51
 	QueryPduWithMtsType   PduType = 0x71
