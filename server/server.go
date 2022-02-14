@@ -63,7 +63,9 @@ func NewUssdProxyServer() *UssdProxyServer {
 
 func ListenAndServe(addr string, app ussdproxy.UdcpApplication) error {
 	s := NewUssdProxyServer()
-	return fasthttp.ListenAndServe(addr, s.FastHttpHandler(app))
+	s.app = ussdproxy.NewMultiplexingApplication(app)
+	fmt.Println("starting the application", app.Name())
+	return s.ListenAndServe(addr)
 }
 
 type healthcheck struct {
@@ -85,21 +87,15 @@ func (s *UssdProxyServer) parseUssdRequest(ctx *fasthttp.RequestCtx) (ussdproxy.
 	return s.ussdReader.Read(ctx)
 }
 
-func (s *UssdProxyServer) ListenAndServe(addr string) {
-	app := ussdproxy.NewMultiplexingApplication(echo.NewEchoApplication())
-	fasthttp.ListenAndServe(addr, s.FastHttpHandler(app))
-}
-
-func (s *UssdProxyServer) FastHttpHandler(app ussdproxy.UdcpApplication) fasthttp.RequestHandler {
-	// TODO: review how sessions are handled at a global level
-	s.sessionMu.Lock()
-	app.UseSession(s.Session) // use the session from the server
-	s.sessionMu.Unlock()
-
-	return s.useFastHttpHandler
+func (s *UssdProxyServer) ListenAndServe(addr string) error {
+	return fasthttp.ListenAndServe(addr, s.useFastHttpHandler)
 }
 
 func (s *UssdProxyServer) useFastHttpHandler(ctx *fasthttp.RequestCtx) {
+	// TODO: review how sessions are handled at a global level
+	s.sessionMu.Lock()
+	s.app.UseSession(s.Session) // use the session from the server
+	s.sessionMu.Unlock()
 	path := string(ctx.Path())
 	if strings.HasPrefix(path, "/healthcheck") {
 		b, err := json.Marshal(healthy())
@@ -118,7 +114,6 @@ func (s *UssdProxyServer) useFastHttpHandler(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	fmt.Println("Received ussd request")
 	request, err := s.parseUssdRequest(ctx)
 	if err != nil {
 		fmt.Println(fmt.Errorf("failed to parse ussd request, got %v", err))
