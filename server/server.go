@@ -1,10 +1,12 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/nndi-oss/ussdproxy/app/echo"
 	"github.com/nndi-oss/ussdproxy/config"
@@ -15,30 +17,30 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
-/*
-* UssdProxyServer
-- manages overall resources on the server side
-- handles http requests
-- converts http requests to udcp requests
-- passes udcp requests to registered applications
-- waits for app to process response
-- responds via http after converting a udcp response
-- handles applicatiion errors
-- has registered ussd marshallers/unmarshallers (ussd.Writer, ussd.Reader)
-- should support registering all supported handlers
-- provides a UI for management/statistics?
--
-* ## Properties
-* - requestTimeout
-* - charLengthLimit
-* - encodingDetection?
-*/
+// UssdProxyServer manages overall resources on the server side
+//
+// * handles ussd / http requests
+//
+// * converts ussd / http requests to udcp requests
+//
+// * passes udcp requests to registered applications
+//
+// * waits for app to process response
+//
+// * responds via http after converting a udcp response
+//
+// * handles application errors
+//
+// * has registered ussd marshallers/unmarshallers (ussd.Writer, ussd.Reader)
+//
+// * should support registering all supported handlers
+//
+// * provides a UI for management/statistics?
 type UssdProxyServer struct {
 	sessionMu sync.Mutex // mutex for the buffer store
 
-	app               *coreApplication
-	requestTimeout    int // Seconds for the request to timeout
-	activeRequestChan chan (struct{})
+	app            *ussdproxy.MultiplexingApplication
+	requestTimeout int // Seconds for the request to timeout
 
 	ussdReader ussd.UssdRequestReader
 	ussdWriter ussd.UssdResponseWriter
@@ -47,19 +49,11 @@ type UssdProxyServer struct {
 	Config  *config.Config
 }
 
-// The Core Application is an application that enables configuring the server,
-// choosing applications and controlling the session. The core application
-// is like a middleware that handles requests and then forwards them to the
-// currently active application depending on the Client request.
-type coreApplication struct {
-	availableApplications []*ussdproxy.UdcpApplication // currently registered/active application
-	activeApplication     *ussdproxy.UdcpApplication   // currently registered/active application
-}
-
 func NewUssdProxyServer() *UssdProxyServer {
 	at := &africastalking.AfricasTalkingUssdHandler{}
 
 	return &UssdProxyServer{
+		app:            ussdproxy.NewMultiplexingApplication(echo.NewEchoApplication()),
 		requestTimeout: 5_000,
 		ussdReader:     at,
 		ussdWriter:     at,
@@ -72,16 +66,18 @@ func ListenAndServe(addr string, app ussdproxy.UdcpApplication) error {
 	return fasthttp.ListenAndServe(addr, s.FastHttpHandler(app))
 }
 
-type healthcheck struct{ status string }
+type healthcheck struct {
+	Status string `json:"status"`
+}
 
 func healthy() *healthcheck {
 	return &healthcheck{
-		status: "HEALTHY",
+		Status: "HEALTHY",
 	}
 }
 func unhealthy() *healthcheck {
 	return &healthcheck{
-		status: "UNHEALTHY",
+		Status: "UNHEALTHY",
 	}
 }
 
@@ -90,56 +86,69 @@ func (s *UssdProxyServer) parseUssdRequest(ctx *fasthttp.RequestCtx) (ussdproxy.
 }
 
 func (s *UssdProxyServer) ListenAndServe(addr string) {
-	app := echo.NewEchoApplication()
+	app := ussdproxy.NewMultiplexingApplication(echo.NewEchoApplication())
 	fasthttp.ListenAndServe(addr, s.FastHttpHandler(app))
 }
 
 func (s *UssdProxyServer) FastHttpHandler(app ussdproxy.UdcpApplication) fasthttp.RequestHandler {
 	// TODO: review how sessions are handled at a global level
+	s.sessionMu.Lock()
 	app.UseSession(s.Session) // use the session from the server
+	s.sessionMu.Unlock()
 
-	return func(ctx *fasthttp.RequestCtx) {
-		path := string(ctx.Path())
-		if strings.HasPrefix(path, "/healthcheck") {
-			b, err := json.Marshal(healthy())
-			if err != nil {
-				fmt.Errorf("Failed to marshal healthcheck. Error: %s", err)
-			}
-			ctx.Write(b)
-			ctx.SetContentType("application/json; charset=utf-8")
-			return
-		}
-		method := string(ctx.Method())
-		if strings.Compare(method, "POST") != 0 {
-			ctx.SetStatusCode(405)
-			return
-		}
+	return s.useFastHttpHandler
+}
 
-		fmt.Println("Received ussd request")
-		request, err := s.parseUssdRequest(ctx)
+func (s *UssdProxyServer) useFastHttpHandler(ctx *fasthttp.RequestCtx) {
+	path := string(ctx.Path())
+	if strings.HasPrefix(path, "/healthcheck") {
+		b, err := json.Marshal(healthy())
 		if err != nil {
-			fmt.Println(fmt.Errorf("failed to parse ussd request, got %v", err))
-			// TODO: should this be a protocol error?
-			s.ussdWriter.WriteEnd(ussdproxy.NewProtocolErrorResponse(), ctx)
+			fmt.Println(fmt.Errorf("failed to marshal healthcheck. Error: %v", err))
+			ctx.WriteString(unhealthy().Status)
 			return
 		}
+		ctx.Write(b)
+		ctx.SetContentType("application/json; charset=utf-8")
+		return
+	}
+	method := string(ctx.Method())
+	if strings.Compare(method, "POST") != 0 {
+		ctx.SetStatusCode(405)
+		return
+	}
 
+	fmt.Println("Received ussd request")
+	request, err := s.parseUssdRequest(ctx)
+	if err != nil {
+		fmt.Println(fmt.Errorf("failed to parse ussd request, got %v", err))
+		// TODO: should this be a protocol error?
+		s.ussdWriter.WriteEnd(ussdproxy.NewProtocolErrorResponse(), ctx)
+		return
+	}
+
+	done := make(chan struct{})
+	requestDurationCtx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Millisecond*80))
+	defer cancel()
+
+	select {
+	case <-done:
 		ussdAction := ussdproxy.UssdContinue
-
 		ctx.SetContentType(s.ussdWriter.GetContentType())
-
-		response, err := ussdproxy.ProcessUdcpRequest(request, app)
+		response, err := ussdproxy.ProcessUdcpRequest(request, s.app)
 		if err != nil {
 			fmt.Println(fmt.Errorf("failed to process request, got %v", err))
-			// TODO: should this be a protocol error?
-			s.ussdWriter.WriteEnd(ussdproxy.NewProtocolErrorResponse(), ctx)
+			// TODO: wrap the error according to the type
+			s.ussdWriter.WriteEnd(ussdproxy.NewErrorResponse(ussdproxy.ErrorNotAsciiPduType), ctx)
+			close(done)
 			return
 		}
 
 		if response == nil {
-			fmt.Println(fmt.Errorf("failed to process request, got a nil response", err))
+			fmt.Println(fmt.Errorf("failed to process request, got %v response", err))
 			// TODO: should this be a protocol error?
-			s.ussdWriter.WriteEnd(ussdproxy.NewProtocolErrorResponse(), ctx)
+			s.ussdWriter.WriteEnd(ussdproxy.NewErrorResponse(ussdproxy.ErrorPduType), ctx)
+			close(done)
 			return
 		}
 
@@ -151,5 +160,12 @@ func (s *UssdProxyServer) FastHttpHandler(app ussdproxy.UdcpApplication) fasthtt
 		} else {
 			s.ussdWriter.Write(response, ctx)
 		}
+
+		close(done)
+
+	case <-requestDurationCtx.Done():
+		fmt.Println("timeout exceeded for ussd request", request)
+		s.ussdWriter.WriteEnd(ussdproxy.NewErrorResponse(ussdproxy.ReleaseDialogPduType), ctx)
 	}
+
 }

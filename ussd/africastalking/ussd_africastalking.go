@@ -73,7 +73,7 @@ func parseUssdRequest(ussdRequest *UssdRequest) (ussdproxy.UdcpRequest, error) {
 	ussdData := ussdRequest.Data
 	typ := ussdproxy.RequestPduType(string(ussdData[0:2]))
 	if typ == ussdproxy.InvalidPduType {
-		return nil, fmt.Errorf("%v got '%v'", ussdproxy.InvalidHeaderError, typ)
+		return nil, fmt.Errorf("%v got '%v'", ussdproxy.ErrInvalidHeader, typ)
 	}
 	//len := len(ussdData)
 	moreToSend := typ.HasMoreToSend()
