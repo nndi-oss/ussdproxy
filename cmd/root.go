@@ -21,8 +21,9 @@ func init() {
 	// viper.BindPFlag("log_file", rootCmd.PersistentFlags().Lookup("log-file"))
 
 	rootCmd.AddCommand(serverCmd)
-	rootCmd.AddCommand(influxAppCmd)
 	rootCmd.AddCommand(echoAppCmd)
+	rootCmd.AddCommand(influxAppCmd)
+	rootCmd.AddCommand(mqttAppCmd)
 	rootCmd.AddCommand(adminCmd)
 }
 
