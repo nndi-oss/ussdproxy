@@ -2,7 +2,6 @@ package mqtt
 
 import (
 	"fmt"
-	"net"
 
 	MQTT "github.com/eclipse/paho.mqtt.golang"
 	ussdproxy "github.com/nndi-oss/ussdproxy/lib"
@@ -22,12 +21,6 @@ type MQTTApplication struct {
 }
 
 func NewMQTTApplication(addr, user, password, topic string) *MQTTApplication {
-	conn1, err := net.Dial("tcp", addr) // test the conneciotn
-	if err != nil {
-		panic(err)
-	}
-	defer conn1.Close()
-
 	return &MQTTApplication{
 		Username: user,
 		Password: password,
