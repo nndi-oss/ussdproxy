@@ -1,12 +1,10 @@
 package server
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/nndi-oss/ussdproxy/app/echo"
 	"github.com/nndi-oss/ussdproxy/config"
@@ -121,46 +119,46 @@ func (s *UssdProxyServer) useFastHttpHandler(ctx *fasthttp.RequestCtx) {
 		s.ussdWriter.WriteEnd(ussdproxy.NewProtocolErrorResponse(), ctx)
 		return
 	}
+	fmt.Println("Processing request ", request)
+	// done := make(chan struct{})
+	// requestDurationCtx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Second*30))
+	// defer cancel()
 
-	done := make(chan struct{})
-	requestDurationCtx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Millisecond*80))
-	defer cancel()
-
-	select {
-	case <-done:
-		ussdAction := ussdproxy.UssdContinue
-		ctx.SetContentType(s.ussdWriter.GetContentType())
-		response, err := ussdproxy.ProcessUdcpRequest(request, s.app)
-		if err != nil {
-			fmt.Println(fmt.Errorf("failed to process request, got %v", err))
-			// TODO: wrap the error according to the type
-			s.ussdWriter.WriteEnd(ussdproxy.NewErrorResponse(ussdproxy.ErrorNotAsciiPduType), ctx)
-			close(done)
-			return
-		}
-
-		if response == nil {
-			fmt.Println(fmt.Errorf("failed to process request, got %v response", err))
-			// TODO: should this be a protocol error?
-			s.ussdWriter.WriteEnd(ussdproxy.NewErrorResponse(ussdproxy.ErrorPduType), ctx)
-			close(done)
-			return
-		}
-
-		if response.IsErrorPdu() || response.IsReleaseDialoguePdu() {
-			ussdAction = ussdproxy.UssdEnd
-		}
-		if ussdAction == ussdproxy.UssdEnd {
-			s.ussdWriter.WriteEnd(response, ctx)
-		} else {
-			s.ussdWriter.Write(response, ctx)
-		}
-
-		close(done)
-
-	case <-requestDurationCtx.Done():
-		fmt.Println("timeout exceeded for ussd request", request)
-		s.ussdWriter.WriteEnd(ussdproxy.NewErrorResponse(ussdproxy.ReleaseDialogPduType), ctx)
+	// select {
+	// case <-done:
+	ussdAction := ussdproxy.UssdContinue
+	ctx.SetContentType(s.ussdWriter.GetContentType())
+	response, err := ussdproxy.ProcessUdcpRequest(request, s.app)
+	if err != nil {
+		fmt.Println(fmt.Errorf("failed to process request, got %v", err))
+		// TODO: wrap the error according to the type
+		s.ussdWriter.WriteEnd(ussdproxy.NewErrorResponse(ussdproxy.ErrorNotAsciiPduType), ctx)
+		// close(done)
+		return
 	}
+
+	if response == nil {
+		fmt.Println(fmt.Errorf("failed to process request, got %v response", err))
+		// TODO: should this be a protocol error?
+		s.ussdWriter.WriteEnd(ussdproxy.NewErrorResponse(ussdproxy.ErrorPduType), ctx)
+		// close(done)
+		return
+	}
+
+	if response.IsErrorPdu() || response.IsReleaseDialoguePdu() {
+		ussdAction = ussdproxy.UssdEnd
+	}
+	if ussdAction == ussdproxy.UssdEnd {
+		s.ussdWriter.WriteEnd(response, ctx)
+	} else {
+		s.ussdWriter.Write(response, ctx)
+	}
+
+	// close(done)
+
+	// case <-requestDurationCtx.Done():
+	// 	fmt.Println("timeout exceeded for ussd request", request)
+	// 	s.ussdWriter.WriteEnd(ussdproxy.NewErrorResponse(ussdproxy.ReleaseDialogPduType), ctx)
+	// }
 
 }
