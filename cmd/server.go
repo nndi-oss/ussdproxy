@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/joho/godotenv"
-	"github.com/nndi-oss/ussdproxy/server"
+	"github.com/nndi-oss/ussdproxy/pkg/server"
 	"github.com/spf13/cobra"
 )
 

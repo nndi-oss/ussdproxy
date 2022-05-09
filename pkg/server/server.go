@@ -7,11 +7,11 @@ import (
 	"sync"
 
 	"github.com/nndi-oss/ussdproxy/app/echo"
-	"github.com/nndi-oss/ussdproxy/config"
 	ussdproxy "github.com/nndi-oss/ussdproxy/lib"
-	"github.com/nndi-oss/ussdproxy/session/boltdb"
-	"github.com/nndi-oss/ussdproxy/ussd"
-	"github.com/nndi-oss/ussdproxy/ussd/africastalking"
+	"github.com/nndi-oss/ussdproxy/pkg/config"
+	"github.com/nndi-oss/ussdproxy/pkg/session/boltdb"
+	"github.com/nndi-oss/ussdproxy/pkg/ussd"
+	"github.com/nndi-oss/ussdproxy/pkg/ussd/africastalking"
 	"github.com/valyala/fasthttp"
 )
 
@@ -44,7 +44,7 @@ type UssdProxyServer struct {
 	ussdWriter ussd.UssdResponseWriter
 
 	Session ussdproxy.Session // session buffer for buffering request data
-	Config  *config.Config
+	Config  *config.UssdProxyConfig
 }
 
 func NewUssdProxyServer() *UssdProxyServer {
