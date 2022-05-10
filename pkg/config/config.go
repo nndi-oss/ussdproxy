@@ -19,6 +19,15 @@ type ServerConfig struct {
 	RequestTimeout int    `mapstructure:"request_timeout"`
 }
 
+type TelemetryServerConfig struct {
+	Host string `mapstructure:"host"`
+	Port int    `mapstructure:"port"`
+}
+
+func (t *TelemetryServerConfig) BindAddress() string {
+	return fmt.Sprintf("%s:%d", t.Host, t.Port)
+}
+
 // DatabaseConfig database configuration
 type DatabaseConfig struct {
 	Name     string `mapstructure:"name"`
@@ -81,10 +90,11 @@ type UdcpConfig struct {
 
 // UssdProxyConfig main configuration struct
 type UssdProxyConfig struct {
-	Server  ServerConfig  `mapstructure:"server"`
-	Ussd    UssdConfig    `mapstructure:"ussd"`
-	Udcp    UdcpConfig    `mapstructure:"udcp"`
-	Logging LoggingConfig `mapstructure:"logging"`
+	Server    ServerConfig          `mapstructure:"server"`
+	Ussd      UssdConfig            `mapstructure:"ussd"`
+	Udcp      UdcpConfig            `mapstructure:"udcp"`
+	Logging   LoggingConfig         `mapstructure:"logging"`
+	Telemetry TelemetryServerConfig `mapstructure:"telemetry"`
 }
 
 func Validate(cfg UssdProxyConfig) error {

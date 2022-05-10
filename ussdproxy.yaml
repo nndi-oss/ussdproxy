@@ -7,6 +7,10 @@ server:
     key: /path/to/server.key
     ca_store: /path/to/server.pem
 
+telemetry:
+  host: "localhost"
+  port: 2222
+
 ussd:
   provider: "africastalking"
   callback_url: "/ussd/callback/ussd-somerandomstring"

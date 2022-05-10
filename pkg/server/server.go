@@ -9,6 +9,7 @@ import (
 	ussdproxy "github.com/nndi-oss/ussdproxy/lib"
 	"github.com/nndi-oss/ussdproxy/pkg/config"
 	"github.com/nndi-oss/ussdproxy/pkg/session/boltdb"
+	"github.com/nndi-oss/ussdproxy/pkg/telemetry"
 	"github.com/nndi-oss/ussdproxy/pkg/ussd"
 	"github.com/valyala/fasthttp"
 )
@@ -41,6 +42,7 @@ type UssdProxyServer struct {
 
 	app            *ussdproxy.MultiplexingApplication
 	requestTimeout int // Seconds for the request to timeout
+	telemetry      *telemetry.Telemetry
 
 	ussdReader ussd.UssdRequestReader
 	ussdWriter ussd.UssdResponseWriter
@@ -60,6 +62,7 @@ func NewUssdProxyServer(configs ...config.UssdProxyConfig) *UssdProxyServer {
 		ussdReader:     ussdProvider,
 		ussdWriter:     ussdProvider,
 		Session:        boltdb.GetOrCreateSession("test"),
+		telemetry:      telemetry.New(defaultConfig.Telemetry.BindAddress()),
 	}
 }
 
