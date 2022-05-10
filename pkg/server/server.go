@@ -1,18 +1,20 @@
 package server
 
 import (
-	"encoding/json"
 	"fmt"
-	"strings"
 	"sync"
 
+	"github.com/fasthttp/router"
 	"github.com/nndi-oss/ussdproxy/app/echo"
 	ussdproxy "github.com/nndi-oss/ussdproxy/lib"
 	"github.com/nndi-oss/ussdproxy/pkg/config"
 	"github.com/nndi-oss/ussdproxy/pkg/session/boltdb"
 	"github.com/nndi-oss/ussdproxy/pkg/ussd"
-	"github.com/nndi-oss/ussdproxy/pkg/ussd/africastalking"
 	"github.com/valyala/fasthttp"
+)
+
+const (
+	DefaultServerRequestTimeout = 5_000
 )
 
 // UssdProxyServer manages overall resources on the server side
@@ -47,14 +49,16 @@ type UssdProxyServer struct {
 	Config  *config.UssdProxyConfig
 }
 
-func NewUssdProxyServer() *UssdProxyServer {
-	at := &africastalking.AfricasTalkingUssdHandler{}
+func NewUssdProxyServer(configs ...config.UssdProxyConfig) *UssdProxyServer {
+	defaultConfig := &config.UssdProxyConfig{}
+
+	ussdProvider := defaultConfig.GetProvider()
 
 	return &UssdProxyServer{
 		app:            ussdproxy.NewMultiplexingApplication(echo.NewEchoApplication()),
-		requestTimeout: 5_000,
-		ussdReader:     at,
-		ussdWriter:     at,
+		requestTimeout: defaultConfig.Server.RequestTimeout,
+		ussdReader:     ussdProvider,
+		ussdWriter:     ussdProvider,
 		Session:        boltdb.GetOrCreateSession("test"),
 	}
 }
@@ -66,99 +70,25 @@ func ListenAndServe(addr string, app ussdproxy.UdcpApplication) error {
 	return s.ListenAndServe(addr)
 }
 
-type healthcheck struct {
-	Status string `json:"status"`
-}
-
-func healthy() *healthcheck {
-	return &healthcheck{
-		Status: "HEALTHY",
-	}
-}
-func unhealthy() *healthcheck {
-	return &healthcheck{
-		Status: "UNHEALTHY",
-	}
-}
-
 func (s *UssdProxyServer) parseUssdRequest(ctx *fasthttp.RequestCtx) (ussdproxy.UdcpRequest, error) {
 	return s.ussdReader.Read(ctx)
 }
 
 func (s *UssdProxyServer) ListenAndServe(addr string) error {
-	return fasthttp.ListenAndServe(addr, s.useFastHttpHandler)
-}
+	r := router.New()
 
-func (s *UssdProxyServer) useFastHttpHandler(ctx *fasthttp.RequestCtx) {
-	// TODO: review how sessions are handled at a global level
-	s.sessionMu.Lock()
-	s.app.UseSession(s.Session) // use the session from the server
-	s.sessionMu.Unlock()
-	path := string(ctx.Path())
-	if strings.HasPrefix(path, "/healthcheck") {
-		b, err := json.Marshal(healthy())
-		if err != nil {
-			fmt.Println(fmt.Errorf("failed to marshal healthcheck. Error: %v", err))
-			ctx.WriteString(unhealthy().Status)
-			return
-		}
-		ctx.Write(b)
-		ctx.SetContentType("application/json; charset=utf-8")
-		return
-	}
-	method := string(ctx.Method())
-	if strings.Compare(method, "POST") != 0 {
-		ctx.SetStatusCode(405)
-		return
-	}
+	r.GET("/healthz", s.healthcheckHandler)
+	r.GET(s.Config.Ussd.CallbackURL, s.ussdCallbackHandler)
+	r.POST(s.Config.Ussd.CallbackURL, s.ussdCallbackHandler)
+	// TODO: Add telemetry stuff
+	r.GET("/metrics", s.notImplementedHandler)
+	// Admin routes, which need to be protected btw
+	r.GET("/admin/apps", s.notImplementedHandler)
+	r.GET("/admin/sessions", s.notImplementedHandler)
+	r.GET("/admin/sessions/active", s.notImplementedHandler)
+	r.GET("/admin/sessions/active", s.notImplementedHandler)
+	r.GET("/admin/settings/udcp", s.notImplementedHandler)
+	r.GET("/admin/settings/apps", s.notImplementedHandler)
 
-	request, err := s.parseUssdRequest(ctx)
-	if err != nil {
-		fmt.Println(fmt.Errorf("failed to parse ussd request, got %v", err))
-		// TODO: should this be a protocol error?
-		s.ussdWriter.WriteEnd(ussdproxy.NewProtocolErrorResponse(), ctx)
-		return
-	}
-	fmt.Println("Processing request ", request)
-	// done := make(chan struct{})
-	// requestDurationCtx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Second*30))
-	// defer cancel()
-
-	// select {
-	// case <-done:
-	ussdAction := ussdproxy.UssdContinue
-	ctx.SetContentType(s.ussdWriter.GetContentType())
-	response, err := ussdproxy.ProcessUdcpRequest(request, s.app)
-	if err != nil {
-		fmt.Println(fmt.Errorf("failed to process request, got %v", err))
-		// TODO: wrap the error according to the type
-		s.ussdWriter.WriteEnd(ussdproxy.NewErrorResponse(ussdproxy.ErrorNotAsciiPduType), ctx)
-		// close(done)
-		return
-	}
-
-	if response == nil {
-		fmt.Println(fmt.Errorf("failed to process request, got %v response", err))
-		// TODO: should this be a protocol error?
-		s.ussdWriter.WriteEnd(ussdproxy.NewErrorResponse(ussdproxy.ErrorPduType), ctx)
-		// close(done)
-		return
-	}
-
-	if response.IsErrorPdu() || response.IsReleaseDialoguePdu() {
-		ussdAction = ussdproxy.UssdEnd
-	}
-	if ussdAction == ussdproxy.UssdEnd {
-		s.ussdWriter.WriteEnd(response, ctx)
-	} else {
-		s.ussdWriter.Write(response, ctx)
-	}
-
-	// close(done)
-
-	// case <-requestDurationCtx.Done():
-	// 	fmt.Println("timeout exceeded for ussd request", request)
-	// 	s.ussdWriter.WriteEnd(ussdproxy.NewErrorResponse(ussdproxy.ReleaseDialogPduType), ctx)
-	// }
-
+	return fasthttp.ListenAndServe(addr, r.Handler)
 }

@@ -1,0 +1,15 @@
+pre-push:
+  commands:
+    golangci:
+      tags: golangci
+      files: git ls-files -m
+      glob: "*.go"
+      run: golangci-lint run
+pre-commit:
+  parallel: true
+  commands:
+    gofmt:
+      tags: gofmt
+      files: git ls-files -m
+      glob: "*.go"
+      run: go fmt ./...

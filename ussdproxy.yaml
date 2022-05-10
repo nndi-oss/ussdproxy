@@ -1,0 +1,47 @@
+# Example configuration for ussdproxy
+# version: 0.0.1
+server:
+  host: "localhost"
+  port: 8327
+  tls:
+    key: /path/to/server.key
+    ca_store: /path/to/server.pem
+
+ussd:
+  provider: "africastalking"
+  callback_url: "/ussd/callback/ussd-somerandomstring"
+
+# Protocol level configuration  
+udcp:
+  keep_alive: true # Whether to wait for data 
+  ussd_timeout_millis: 5_000 # Number of milliseconds before a request can be considered timed-out
+  receive_ready_limit: 5 # Number of RR pdus to send to the server 
+  max_buffer_size: 8096 # Maximum size of the buffer on the server and client side
+  # Apps or Services are applications running on the UDCP server 
+  apps:
+  - name: echo
+  - name: influx
+  - name: mqtt
+
+  commands:
+    query_session_id: true
+    query_keep_alive: true
+    query_receive_ready_limit: true
+    query_max_buffer_size: true
+    clear_buffer: true # Clear the server's buffer for the session
+    grow_buffer: true # Ability for a client to grow session buffer to some value less than maxBufferSize
+    shrink_buffer: true # Ability for client to shrink the session buffer (recommended for IOT apps)
+    cache_session: true # Keep the session with a specified TTL (time-to-live)
+    close_session: true # Close the session/end the connection
+
+  session:
+    driver: "postgres" # or boltdb, or redis
+    url: "postgres://localhost:5432/ussdproxy?sslmode=disable&usename=&password"
+    #url: "redis://localhost:5432/ussdproxy?sslmode=disable&user=&password="
+    ## For BoltDB
+    path: /path/to/boltdb/data-dir
+
+## Logging
+logging:
+  level: INFO
+  log_file: ./logs/ussdproxy.log

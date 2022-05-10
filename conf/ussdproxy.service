@@ -1,0 +1,14 @@
+[Unit]
+Description=USSDProxy
+Documentation=https://github.com/nndi-oss/ussdproxy
+After=network.target
+
+[Service]
+User=root
+ExecStart=/usr/bin/ussdproxy --config="/etc/ussdproxy/ussdproxy.yaml" server
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=multi-user.target

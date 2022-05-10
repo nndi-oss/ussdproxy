@@ -11,6 +11,10 @@ import (
 
 type AfricasTalkingUssdHandler struct{}
 
+func New() *AfricasTalkingUssdHandler {
+	return &AfricasTalkingUssdHandler{}
+}
+
 func (u *AfricasTalkingUssdHandler) Read(ctx *fasthttp.RequestCtx) (ussdproxy.UdcpRequest, error) {
 
 	requestData := ctx.FormValue("text")

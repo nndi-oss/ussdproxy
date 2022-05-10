@@ -1,0 +1,35 @@
+version: '3'
+networks:
+  ussdproxy-network:
+
+services:
+  ussdproxy:
+    build: .
+    volumes:
+      - "./development.yaml:/data/ussdproxy.yaml"
+    networks:
+      - ussdproxy-network
+  nats-server:
+    image: nats
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    networks:
+      - ussdproxy-network
+  mqtt-server:
+    image: eclipse-mosquitto
+    volumes:
+      - "./conf/mosquitto-dev.conf:/mosquitto/config/mosquitto.conf"
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    networks:
+      - ussdproxy-network
+  questdb-server:
+    image: questdb
+    ports:
+      - "9000:9000"
+      - "8812:8812"
+      - "9009:9009"
+    networks:
+      - ussdproxy-network

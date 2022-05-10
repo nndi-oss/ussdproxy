@@ -52,6 +52,10 @@ func (u *FlaresRequest) Bytes() []byte {
 
 type FlaresUssdHandler struct{}
 
+func New() *FlaresUssdHandler {
+	return &FlaresUssdHandler{}
+}
+
 func (u *FlaresUssdHandler) Read(ctx *fasthttp.RequestCtx) (ussdproxy.UdcpRequest, error) {
 	requestData := ctx.Request.Body()
 	if requestData == nil {

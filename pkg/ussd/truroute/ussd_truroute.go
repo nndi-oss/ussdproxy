@@ -73,6 +73,10 @@ func (u *TruRouteRequest) Bytes() []byte {
 
 type TrurouteUssdHandler struct{}
 
+func New() *TrurouteUssdHandler {
+	return &TrurouteUssdHandler{}
+}
+
 func (u *TrurouteUssdHandler) Read(ctx *fasthttp.RequestCtx) (ussdproxy.UdcpRequest, error) {
 	requestData := ctx.Request.Body()
 	if requestData == nil {

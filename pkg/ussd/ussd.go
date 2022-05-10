@@ -7,6 +7,11 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
+type UssdProvider interface {
+	UssdRequestReader
+	UssdResponseWriter
+}
+
 // UssdResponseWriter writes a ussd response to the given io.Writer
 // The ussd response is written out in the format the the connected
 // system supports
