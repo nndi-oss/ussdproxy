@@ -75,7 +75,7 @@ func (u *UssdRequest) Bytes() []byte {
 
 func parseUssdRequest(ussdRequest *UssdRequest) (ussdproxy.UdcpRequest, error) {
 	ussdData := ussdRequest.Data
-	typ := ussdproxy.RequestPduType(string(ussdData[0:2]))
+	typ := ussdproxy.RequestPduType(string(ussdData[0:3]))
 	if typ == ussdproxy.InvalidPduType {
 		return nil, fmt.Errorf("%v got '%v'", ussdproxy.ErrInvalidHeader, typ)
 	}

@@ -10,9 +10,8 @@ import (
 
 func (s *UssdProxyServer) ussdCallbackHandler(ctx *fasthttp.RequestCtx) {
 	// TODO: review how sessions are handled at a global level
-	s.sessionMu.Lock()
 	s.app.UseSession(s.Session) // use the session from the server
-	s.sessionMu.Unlock()
+
 	path := string(ctx.Path())
 
 	s.telemetry.AddCounter("ussd.requests." + path)

@@ -40,13 +40,13 @@ const (
 
 	ApplicationPduAscii    PduTypeAscii = "A;"
 	CommandPduAscii        PduTypeAscii = "C;"
-	CommandPduWithMtsAscii PduTypeAscii = "c;"
+	CommandPduWithMtsAscii PduTypeAscii = "CX;"
 	DataLongPduAscii       PduTypeAscii = "D;"
-	DataPduWithMtsAscii    PduTypeAscii = "d;"
+	DataPduWithMtsAscii    PduTypeAscii = "DX;"
 	ReceiveReadyPduAscii   PduTypeAscii = "R;"
 	ErrorPduAscii          PduTypeAscii = "E;"
 	QueryPduAscii          PduTypeAscii = "Q;"
-	QueryPduWithMtsAscii   PduTypeAscii = "q;"
+	QueryPduWithMtsAscii   PduTypeAscii = "QX;"
 	UdcpProtocolPduAscii   PduTypeAscii = "U;"
 	ReleaseDialogPduAscii  PduTypeAscii = "X;"
 
@@ -90,11 +90,11 @@ func RequestPduType(t string) PduType {
 		return ApplicationPduType
 	case "C;":
 		return CommandPduType
-	case "c;":
+	case "CX;":
 		return CommandPduWithMtsType
 	case "D;":
 		return DataLongPduType
-	case "d;":
+	case "DX;":
 		return DataPduWithMtsType
 	case "R;":
 		return ReceiveReadyPduType
@@ -102,7 +102,7 @@ func RequestPduType(t string) PduType {
 		return ErrorPduType
 	case "Q;":
 		return QueryPduType
-	case "q;":
+	case "QX;":
 		return QueryPduWithMtsType
 	case "U;":
 		return UdcpProtocolPduType

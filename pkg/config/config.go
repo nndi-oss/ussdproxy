@@ -115,5 +115,5 @@ func (c *UssdProxyConfig) GetProvider() ussd.UssdProvider {
 		return flares.New()
 	}
 
-	return nil
+	panic("Invalid USSD Provider specified")
 }

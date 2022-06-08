@@ -1,7 +1,6 @@
 package server
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/fasthttp/router"
@@ -51,26 +50,22 @@ type UssdProxyServer struct {
 	Config  *config.UssdProxyConfig
 }
 
-func NewUssdProxyServer(configs ...config.UssdProxyConfig) *UssdProxyServer {
-	defaultConfig := &config.UssdProxyConfig{}
+func NewUssdProxyServer(userConfig *config.UssdProxyConfig, application ussdproxy.UdcpApplication) *UssdProxyServer {
+	if userConfig == nil {
+		panic("Invalid configuration for Server") // TODO: do better
+	}
 
-	ussdProvider := defaultConfig.GetProvider()
+	ussdProvider := userConfig.GetProvider()
 
 	return &UssdProxyServer{
+		Config:         userConfig,
 		app:            ussdproxy.NewMultiplexingApplication(echo.NewEchoApplication()),
-		requestTimeout: defaultConfig.Server.RequestTimeout,
+		requestTimeout: userConfig.Server.RequestTimeout,
 		ussdReader:     ussdProvider,
 		ussdWriter:     ussdProvider,
 		Session:        boltdb.GetOrCreateSession("test"),
-		telemetry:      telemetry.New(defaultConfig.Telemetry.BindAddress()),
+		telemetry:      telemetry.New(userConfig.Telemetry.BindAddress()),
 	}
-}
-
-func ListenAndServe(addr string, app ussdproxy.UdcpApplication) error {
-	s := NewUssdProxyServer()
-	s.app = ussdproxy.NewMultiplexingApplication(app)
-	fmt.Println("starting the application", app.Name())
-	return s.ListenAndServe(addr)
 }
 
 func (s *UssdProxyServer) parseUssdRequest(ctx *fasthttp.RequestCtx) (ussdproxy.UdcpRequest, error) {
@@ -89,7 +84,7 @@ func (s *UssdProxyServer) ListenAndServe(addr string) error {
 	r.GET("/admin/apps", s.notImplementedHandler)
 	r.GET("/admin/sessions", s.notImplementedHandler)
 	r.GET("/admin/sessions/active", s.notImplementedHandler)
-	r.GET("/admin/sessions/active", s.notImplementedHandler)
+	r.GET("/admin/sessions/closed", s.notImplementedHandler)
 	r.GET("/admin/settings/udcp", s.notImplementedHandler)
 	r.GET("/admin/settings/apps", s.notImplementedHandler)
 

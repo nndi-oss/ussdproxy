@@ -1,7 +1,8 @@
 package cmd
 
 import (
-	"log"
+	"fmt"
+	"os"
 
 	"github.com/nndi-oss/ussdproxy/app/echo"
 	"github.com/nndi-oss/ussdproxy/pkg/server"
@@ -13,11 +14,9 @@ var echoAppCmd = &cobra.Command{
 	Short: "Starts the echo server",
 	Long:  `Starts the echo server`,
 	Run: func(cmd *cobra.Command, args []string) {
-		addr := "localhost:3000"
-		echoAplication := echo.NewEchoApplication()
-
-		if err := server.ListenAndServe(addr, echoAplication); err != nil {
-			log.Fatalf("Failed to start Echo Application. Error %s", err)
-		}
+		s := server.NewUssdProxyServer(config, echo.NewEchoApplication())
+		addr := fmt.Sprintf("%s:%d", config.Server.Host, config.Server.Port)
+		s.ListenAndServe(addr)
+		os.Exit(1)
 	},
 }
