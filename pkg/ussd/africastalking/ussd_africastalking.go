@@ -18,11 +18,11 @@ func New() *AfricasTalkingUssdHandler {
 func (u *AfricasTalkingUssdHandler) Read(ctx *fasthttp.RequestCtx) (ussdproxy.UdcpRequest, error) {
 
 	requestData := ctx.FormValue("text")
-	if requestData == nil {
+	if string(requestData) == "" {
 		requestData = []byte("R;__NODATA__") // if the request is empty, we default to a receive-ready
 	}
 
-	if ctx.FormValue("phoneNumber") == nil || ctx.FormValue("sessionId") == nil {
+	if string(ctx.FormValue("phoneNumber")) == "" || string(ctx.FormValue("sessionId")) == "" {
 		ctx.SetStatusCode(400)
 		return nil, fmt.Errorf("invalid request, got body: %s", string(ctx.Request.Body()))
 	}
@@ -30,7 +30,7 @@ func (u *AfricasTalkingUssdHandler) Read(ctx *fasthttp.RequestCtx) (ussdproxy.Ud
 	return parseUssdRequest(&UssdRequest{
 		SessionID:   string(ctx.FormValue("sessionId")),
 		PhoneNumber: string(ctx.FormValue("phoneNumber")),
-		Data:        []byte(requestData),
+		Data:        requestData,
 		Channel:     string(ctx.FormValue("channel")),
 	})
 }
@@ -40,12 +40,12 @@ func (u *AfricasTalkingUssdHandler) GetContentType() string {
 }
 
 func (u *AfricasTalkingUssdHandler) Write(response ussdproxy.UdcpResponse, writer io.Writer) (int, error) {
-	writer.Write([]byte("CON\n"))
+	writer.Write([]byte("CON "))
 	return writer.Write(response.Data())
 }
 
 func (u *AfricasTalkingUssdHandler) WriteEnd(response ussdproxy.UdcpResponse, writer io.Writer) (int, error) {
-	writer.Write([]byte("END\n"))
+	writer.Write([]byte("END "))
 	return writer.Write(response.Data())
 }
 
@@ -74,13 +74,13 @@ func (u *UssdRequest) Bytes() []byte {
 }
 
 func parseUssdRequest(ussdRequest *UssdRequest) (ussdproxy.UdcpRequest, error) {
-	ussdData := ussdRequest.Data
-	typ := ussdproxy.RequestPduType(string(ussdData[0:3]))
+	ussdData := string(ussdRequest.Data)
+	typ := ussdproxy.RequestPduType(ussdData)
 	if typ == ussdproxy.InvalidPduType {
 		return nil, fmt.Errorf("%v got '%v'", ussdproxy.ErrInvalidHeader, typ)
 	}
 	//len := len(ussdData)
 	moreToSend := typ.HasMoreToSend()
 	// TODO: add a generic NewRequest func to account for the type
-	return ussdproxy.NewDataRequest(ussdData[2:], moreToSend), nil
+	return ussdproxy.NewDataRequest([]byte(ussdproxy.StripPdu(ussdData, typ)), moreToSend), nil
 }
