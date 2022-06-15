@@ -1,7 +1,8 @@
 package cmd
 
 import (
-	"log"
+	"fmt"
+	"os"
 
 	"github.com/nndi-oss/ussdproxy/app/influx"
 	"github.com/nndi-oss/ussdproxy/pkg/server"
@@ -14,8 +15,9 @@ var influxAppCmd = &cobra.Command{
 	Long:  `Starts the influx proxy server`,
 	Run: func(cmd *cobra.Command, args []string) {
 		influxApplication := influx.NewInfluxApp("127.0.0.1:9009", "ussdproxy", "user", "password")
-		if err := server.ListenAndServe("localhost:3000", influxApplication); err != nil {
-			log.Fatalf("Failed to start Influx Application. Error %s", err)
-		}
+		s := server.NewUssdProxyServer(config, influxApplication)
+		addr := fmt.Sprintf("%s:%d", config.Server.Host, config.Server.Port)
+		s.ListenAndServe(addr)
+		os.Exit(1)
 	},
 }

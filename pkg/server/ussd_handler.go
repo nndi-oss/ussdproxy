@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -11,21 +10,12 @@ import (
 
 func (s *UssdProxyServer) ussdCallbackHandler(ctx *fasthttp.RequestCtx) {
 	// TODO: review how sessions are handled at a global level
-	s.sessionMu.Lock()
 	s.app.UseSession(s.Session) // use the session from the server
-	s.sessionMu.Unlock()
+
 	path := string(ctx.Path())
-	if strings.HasPrefix(path, "/healthcheck") {
-		b, err := json.Marshal(healthy())
-		if err != nil {
-			fmt.Println(fmt.Errorf("failed to marshal healthcheck. Error: %v", err))
-			ctx.WriteString(unhealthy().Status)
-			return
-		}
-		ctx.Write(b)
-		ctx.SetContentType("application/json; charset=utf-8")
-		return
-	}
+
+	s.telemetry.AddCounter("ussd.requests." + path)
+
 	method := string(ctx.Method())
 	if strings.Compare(method, "POST") != 0 {
 		ctx.SetStatusCode(405)
@@ -35,6 +25,7 @@ func (s *UssdProxyServer) ussdCallbackHandler(ctx *fasthttp.RequestCtx) {
 	request, err := s.parseUssdRequest(ctx)
 	if err != nil {
 		fmt.Println(fmt.Errorf("failed to parse ussd request, got %v", err))
+		s.telemetry.AddCounter("ussd.requests.errors")
 		// TODO: should this be a protocol error?
 		s.ussdWriter.WriteEnd(ussdproxy.NewProtocolErrorResponse(), ctx)
 		return
@@ -51,6 +42,7 @@ func (s *UssdProxyServer) ussdCallbackHandler(ctx *fasthttp.RequestCtx) {
 	response, err := ussdproxy.ProcessUdcpRequest(request, s.app)
 	if err != nil {
 		fmt.Println(fmt.Errorf("failed to process request, got %v", err))
+		s.telemetry.AddCounter("ussd.response.errors")
 		// TODO: wrap the error according to the type
 		s.ussdWriter.WriteEnd(ussdproxy.NewErrorResponse(ussdproxy.ErrorNotAsciiPduType), ctx)
 		// close(done)
@@ -59,6 +51,7 @@ func (s *UssdProxyServer) ussdCallbackHandler(ctx *fasthttp.RequestCtx) {
 
 	if response == nil {
 		fmt.Println(fmt.Errorf("failed to process request, got %v response", err))
+		s.telemetry.AddCounter("ussd.response.errors")
 		// TODO: should this be a protocol error?
 		s.ussdWriter.WriteEnd(ussdproxy.NewErrorResponse(ussdproxy.ErrorPduType), ctx)
 		// close(done)
@@ -68,7 +61,9 @@ func (s *UssdProxyServer) ussdCallbackHandler(ctx *fasthttp.RequestCtx) {
 	if response.IsErrorPdu() || response.IsReleaseDialoguePdu() {
 		ussdAction = ussdproxy.UssdEnd
 	}
+
 	if ussdAction == ussdproxy.UssdEnd {
+		s.telemetry.AddCounter("ussd.sessions.closed")
 		s.ussdWriter.WriteEnd(response, ctx)
 	} else {
 		s.ussdWriter.Write(response, ctx)

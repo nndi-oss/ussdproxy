@@ -102,7 +102,7 @@ func ProcessUdcpRequest(udcpReq UdcpRequest, application UdcpApplication) (UdcpR
 	/// 2. If the session exists, load the current session buffer store
 	/// 3. If the UdcpRequest is a a ReceiveReady request
 	/// 4. Check if
-
+	fmt.Println("Processing request", udcpReq)
 	if udcpReq == nil {
 		return NewErrorResponse(ErrorCodeProtoErrorMask), ErrUnknownParse
 	}

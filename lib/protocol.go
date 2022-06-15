@@ -1,6 +1,7 @@
 package ussdproxy
 
 import (
+	"strings"
 	"time"
 )
 
@@ -40,13 +41,13 @@ const (
 
 	ApplicationPduAscii    PduTypeAscii = "A;"
 	CommandPduAscii        PduTypeAscii = "C;"
-	CommandPduWithMtsAscii PduTypeAscii = "c;"
+	CommandPduWithMtsAscii PduTypeAscii = "CX;"
 	DataLongPduAscii       PduTypeAscii = "D;"
-	DataPduWithMtsAscii    PduTypeAscii = "d;"
+	DataPduWithMtsAscii    PduTypeAscii = "DX;"
 	ReceiveReadyPduAscii   PduTypeAscii = "R;"
 	ErrorPduAscii          PduTypeAscii = "E;"
 	QueryPduAscii          PduTypeAscii = "Q;"
-	QueryPduWithMtsAscii   PduTypeAscii = "q;"
+	QueryPduWithMtsAscii   PduTypeAscii = "QX;"
 	UdcpProtocolPduAscii   PduTypeAscii = "U;"
 	ReleaseDialogPduAscii  PduTypeAscii = "X;"
 
@@ -84,37 +85,40 @@ func (p PduTypeAscii) HasMoreToSend() bool {
 	return false
 }
 
-func RequestPduType(t string) PduType {
-	switch t {
-	case "A;":
+func RequestPduType(data string) PduType {
+	if strings.HasPrefix(data, "A;") {
 		return ApplicationPduType
-	case "C;":
+	} else if strings.HasPrefix(data, "C;") {
 		return CommandPduType
-	case "c;":
+	} else if strings.HasPrefix(data, "CX;") {
 		return CommandPduWithMtsType
-	case "D;":
+	} else if strings.HasPrefix(data, "D;") {
 		return DataLongPduType
-	case "d;":
+	} else if strings.HasPrefix(data, "DX;") {
 		return DataPduWithMtsType
-	case "R;":
+	} else if strings.HasPrefix(data, "R;") {
 		return ReceiveReadyPduType
-	case "E;":
+	} else if strings.HasPrefix(data, "E;") {
 		return ErrorPduType
-	case "Q;":
+	} else if strings.HasPrefix(data, "Q;") {
 		return QueryPduType
-	case "q;":
+	} else if strings.HasPrefix(data, "QX;") {
 		return QueryPduWithMtsType
-	case "U;":
+	} else if strings.HasPrefix(data, "U;") {
 		return UdcpProtocolPduType
-	case "X;":
+	} else if strings.HasPrefix(data, "X;") {
 		return ReleaseDialogPduType
-	default:
-		return InvalidPduType
 	}
+
+	return InvalidPduType
+}
+
+func StripPdu(data string, pduType PduType) string {
+	return strings.Replace(data, pduType.String(), "", 1)
 }
 
 // String returns the string representation of the PDU Type
-func (p PduType) String() PduTypeAscii {
+func (p PduType) Ascii() PduTypeAscii {
 	switch p {
 	case ApplicationPduType:
 		return ApplicationPduAscii
@@ -141,4 +145,9 @@ func (p PduType) String() PduTypeAscii {
 		return ErrorPduAscii
 	}
 	return ErrorPduAscii
+}
+
+// String returns the string representation of the PDU Type
+func (p PduType) String() string {
+	return string(p.Ascii())
 }
